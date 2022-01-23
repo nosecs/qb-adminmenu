@@ -4,6 +4,7 @@ local vehicleDevMode = false
 local banreason = 'Unknown'
 local kickreason = 'Unknown'
 local menuLocation = 'topright' -- e.g. topright (default), topleft, bottomright, bottomleft
+local Freecam = exports['fivem-freecam']
 
 local menu = MenuV:CreateMenu(false, Lang:t("menu.admin_menu"), menuLocation, 220, 20, 60, 'size-125', 'none', 'menuv', 'test')
 local menu2 = MenuV:CreateMenu(false, Lang:t("menu.admin_options"), menuLocation, 220, 20, 60, 'size-125', 'none', 'menuv', 'test1')
@@ -65,6 +66,12 @@ local menu_button6 = menu2:AddButton({
     value = 'revive',
     description = Lang:t("desc.revive_desc")
 })
+local menu_setjob = menu2:AddButton({
+    icon = '💼',
+    label = 'Set Player Job',
+    value = 'setjob',
+    description = 'Set your own job'
+})
 local menu_button7 = menu2:AddCheckbox({
     icon = '👻',
     label = Lang:t("menu.invisible"),
@@ -76,6 +83,12 @@ local menu_button8 = menu2:AddCheckbox({
     label = Lang:t("menu.god"),
     value = menu2,
     description = Lang:t("desc.god_desc")
+})
+local menu_freecam = menu2:AddCheckbox({
+    icon = '📷',
+    label = 'Freecam',
+    value = menu2,
+    description = 'Like noclip except only your camera moves and not your ped'
 })
 local names_button = menu2:AddCheckbox({
     icon = '📋',
@@ -320,6 +333,21 @@ local coords4_button = menu11:AddButton({
     value = 'coords',
     description = Lang:t("desc.vector4_desc")
 })
+
+local rotation_button = menu11:AddButton({
+    icon = '📋',
+    label = 'Copy rotation',
+    value = 'rotation',
+    description = 'Copy rotation To Clipboard'
+})
+
+local changeped_button = menu11:AddButton({
+    icon = '🧙',
+    label = 'Change Ped',
+    value = 'changeped',
+    description = 'Changes Player Ped'
+})
+
 local togglecoords_button = menu11:AddCheckbox({
     icon = '📍',
     label = Lang:t("menu.display_coords"),
@@ -430,6 +458,15 @@ local function CopyToClipboard(dataType)
             string = string.format('vector4(%s, %s, %s, %s)', x, y, z, h)
         })
         QBCore.Functions.Notify(Lang:t("success.coords_copied"), "success")
+    elseif dataType == 'rotation' then
+        local coords = GetEntityRotation(ped)
+        local x = round(coords.x, 2)
+        local y = round(coords.y, 2)
+        local z = round(coords.z, 2)
+        SendNUIMessage({
+            string = string.format('vector4(%s, %s, %s)', x, y, z)
+        })
+        QBCore.Functions.Notify("Rotation copied to clipboard!", "success")
     elseif dataType == 'heading' then
         local heading = GetEntityHeading(ped)
         local h = round(heading, 2)
@@ -506,6 +543,10 @@ end)
 
 coords4_button:On("select", function()
     CopyToClipboard('coords4')
+end)
+
+rotation_button:On("select", function()
+    CopyToClipboard('rotation')
 end)
 
 heading_button:On("select", function()
@@ -643,6 +684,24 @@ end)
 
 -- Player List
 
+local function setplayerjob(player)
+    MenuV:CloseMenu(menu2)
+    MenuV:CloseMenu(menu)
+    local ply = player
+    if PlayerId() == player then
+        ply = GetPlayerServerId(player)
+    end
+    if type(player) == "table" then
+        TriggerEvent('adminui:setjob', function(data)
+            TriggerServerEvent("qb-admin:server:changejob", ply, data)
+        end, player.cid)
+    else
+        TriggerEvent('adminui:setjob', function(data)
+            TriggerServerEvent("qb-admin:server:changejob", ply, data)
+        end)
+    end
+end
+
 local function OpenPermsMenu(permsply)
     QBCore.Functions.TriggerCallback('qb-admin:server:getrank', function(rank)
         if rank then
@@ -715,6 +774,30 @@ local function LocalInput(text, number, windows)
       return result
   end
 end
+
+local function changeplayerped()
+    MenuV:CloseMenu(menu11)
+    MenuV:CloseMenu(menu)
+    TriggerEvent('adminui:oneinput','Change Player Ped', "Ped Model:", function(data)
+        local ped = data
+    
+        if IsModelValid(ped) then
+            RequestModel(GetHashKey(ped))
+            while not HasModelLoaded(GetHashKey(ped)) do
+                Wait(100)
+            end
+            SetPlayerModel(PlayerId(), ped)
+            print(ped)
+        else
+            QBCore.Functions.Notify('Ped is not valid!', 'error')
+        end
+    end)
+    
+end
+
+changeped_button:On("select", function()
+    changeplayerped()
+end)
 
 local function LocalInputInt(text, number, windows)
     AddTextEntry("FMMC_MPM_NA", text)
@@ -926,6 +1009,12 @@ local function OpenPlayerMenus(player)
             label = Lang:t("menu.permissions"),
             value = "perms",
             description = Lang:t("info.give") .. " " .. player.cid .. " " .. Lang:t("menu.permissions")
+        },
+        [13] = {
+            icon = '💼',
+            label = "Set Player Job",
+            value = "changejobet",
+            description = "Set " .. player.cid .. " Job"
         }
     }
     for k, v in ipairs(elements) do
@@ -944,6 +1033,11 @@ local function OpenPlayerMenus(player)
                     OpenKickMenu(player)
                 elseif values == "perms" then
                     OpenPermsMenu(player)
+                elseif values == "changejobet" then
+                    MenuV:CloseMenu(Players)
+                    MenuV:CloseMenu(menu4)
+                    MenuV:CloseMenu(menu)
+                    setplayerjob(player)
                 end
             end
         })
@@ -982,6 +1076,18 @@ end)
 
 menu_button6:On('select', function(item)
     TriggerEvent('hospital:client:Revive', PlayerPedId())
+end)
+
+menu_setjob:On('select', function(item)
+    setplayerjob(PlayerId())
+end)
+
+-- Freecam
+
+menu_freecam:On("change", function (item, newValue, oldValue)
+    --print(item, newValue, oldValue)
+    local isActive = Freecam:IsActive()
+    Freecam:SetActive(not isActive)
 end)
 
 -- Invisible

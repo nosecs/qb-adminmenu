@@ -60,6 +60,18 @@ end
 
 -- Events
 
+RegisterNetEvent("qb-admin:server:changejob", function (player, data)
+    local ply = player
+    local job = data.job
+    local grade = data.grade
+    local Player = QBCore.Functions.GetPlayer(tonumber(ply))
+    if Player then
+        Player.Functions.SetJob(tostring(job), tonumber(grade))
+    else
+        TriggerClientEvent('QBCore:Notify', src, 'Player Not Online', 'error')
+    end
+end)
+
 RegisterNetEvent('qb-admin:server:GetPlayersForBlips', function()
     local src = source
     local players = {}
